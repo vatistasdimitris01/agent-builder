@@ -1,0 +1,13 @@
+{
+	"provider": "groq",
+	"openaiApiKey": "",
+	"anthropicApiKey": "",
+	"groqApiKey": "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",
+	"geminiApiKey": "",
+	"ollamaBaseUrl": "http://localhost:11434",
+	"theme": "panda",
+	"model": "openai/gpt-oss-safeguard-20b",
+	"telegramToken": "8690769425:AAGIy7c0L9fLBl72RcVtcKAhZFyXb8kaHZY",
+	"allowedFilesystemDir": "/Users/vatistasdimitris/Desktop/sandbox",
+	"artSize": "medium"
+}

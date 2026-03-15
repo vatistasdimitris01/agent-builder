@@ -1,0 +1,65 @@
+import { Bot } from 'grammy';
+import config from '../config/index.js';
+import runner from '../agent/runner.js';
+import { setBot } from './botInstance.js';
+
+export const start = async () => {
+  const token = config.get('telegramToken');
+  if (!token) {
+    console.error('Telegram Token not configured. Please run "panda setup" to configure.');
+    return;
+  }
+
+  const bot = new Bot(token);
+  setBot(bot);
+
+  bot.command('start', (ctx) => ctx.reply('Welcome to Panda Agents! I am ready to assist you.'));
+  bot.command('help', (ctx) => ctx.reply('Commands: /start, /help, /clear, /skills'));
+
+  bot.on('message', async (ctx) => {
+    const userMessage = ctx.message.text;
+    const messages = [{ role: 'user', content: userMessage }];
+    
+    // Add context for the agent to know it's in a Telegram chat and the chat ID
+    // We can add a system message or append to the user message
+    messages.push({ 
+      role: 'system', 
+      content: `You are chatting via Telegram. The chat ID is ${ctx.chat.id}. You can use the 'telegram' tool to send messages or photos.` 
+    });
+    
+    try {
+      const responseStream = runner.run({ 
+        messages, 
+        provider: config.get('provider') || 'openai',
+        model: config.get('model')
+      });
+      
+      let replyText = '';
+      
+      for await (const chunk of responseStream) {
+        if (chunk.type === 'content') {
+          replyText += chunk.content;
+        }
+        // If tool executes, we might want to notify user? 
+        // For now, let's just stream content.
+      }
+      
+      if (replyText) {
+        await ctx.reply(replyText);
+      } else {
+        // Maybe a tool sent a photo and no text response was generated?
+        // We should check if we already sent something via tool.
+        // But for now, if no text, say nothing or check if tool was called.
+      }
+      
+    } catch (error) {
+      console.error('Error handling message:', error);
+      await ctx.reply('Sorry, an error occurred while processing your request.');
+    }
+  });
+
+  bot.start();
+  console.log('Telegram bot started!');
+};
+
+export default { start };
