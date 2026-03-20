@@ -9,9 +9,22 @@ const config = new Conf({
   projectName: 'panda-agents',
   cwd: configDir,
   schema: {
-    provider: {
+    selectedModelId: {
       type: 'string',
-      default: 'openai'
+      default: ''
+    },
+    models: {
+      type: 'array',
+      default: [],
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          provider: { type: 'string' },
+          model: { type: 'string' }
+        }
+      }
     },
     openaiApiKey: {
       type: 'string',

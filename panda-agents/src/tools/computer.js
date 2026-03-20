@@ -11,10 +11,18 @@ const execute = async ({ command, args }) => {
         return `Screenshot saved to ${output}`;
       
       case 'getScreenSize':
+        if (process.platform === 'win32') {
+          const { stdout } = await exec('powershell "Get-DisplayResolution"');
+          return stdout.trim() || 'Unable to detect resolution on Windows via Get-DisplayResolution';
+        }
         const { stdout } = await exec('system_profiler SPDisplaysDataType | grep Resolution');
         return stdout.trim();
 
       case 'openApp':
+        if (process.platform === 'win32') {
+          await exec(`start "" "${args.appName}"`);
+          return `Opened ${args.appName}`;
+        }
         await exec(`open -a "${args.appName}"`);
         return `Opened ${args.appName}`;
 
@@ -25,7 +33,12 @@ const execute = async ({ command, args }) => {
           await exec(`osascript -e '${script}'`);
           return `Typed "${args.text}"`;
         }
-        return 'Typing supported only on macOS currently.';
+        if (process.platform === 'win32') {
+          const script = `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('${args.text}')`;
+          await exec(`powershell "${script}"`);
+          return `Typed "${args.text}"`;
+        }
+        return 'Typing supported only on macOS and Windows currently.';
 
       case 'click':
         // Requires cliclick or similar if not using accessibility API directly which is complex in pure JS without deps.

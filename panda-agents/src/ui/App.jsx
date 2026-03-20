@@ -51,8 +51,13 @@ const App = () => {
     }
   };
 
-  const model = config.get('model') || 'Default Model';
-  const provider = config.get('provider') || 'openai';
+  const selectedModelId = config.get('selectedModelId');
+  const models = config.get('models') || [];
+  const selectedModel = models.find(m => m.id === selectedModelId) || models[0];
+  
+  const modelName = selectedModel ? selectedModel.name : 'No Model Configured';
+  const provider = selectedModel ? selectedModel.provider : 'None';
+  const modelId = selectedModel ? selectedModel.model : 'None';
 
   return (
     <Box flexDirection="column" width="100%">
@@ -77,7 +82,7 @@ const App = () => {
                 {getPandaArt(config.get('artSize'))}
               </Text>
             </Box>
-            <Text color="gray">{model} · API Usage Billing</Text>
+            <Text color="gray">{modelName} ({provider}/{modelId}) · API Usage Billing</Text>
             <Text color="gray">{process.cwd()}</Text>
           </Box>
         </Box>

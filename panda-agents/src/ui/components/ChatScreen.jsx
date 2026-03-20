@@ -9,6 +9,7 @@ import SkillsMenu from './SkillsMenu.jsx';
 const SLASH_COMMANDS = [
   { cmd: '/settings', desc: 'Open config panel' },
   { cmd: '/skills', desc: 'Manage agent tools and skills' },
+  { cmd: '/model', desc: 'Switch or list models' },
   { cmd: '/clear', desc: 'Clear conversation history' },
   { cmd: '/exit', desc: 'Exit Panda Agents' }
 ];
@@ -20,6 +21,7 @@ const ChatScreen = ({ onCommand }) => {
   const [currentResponse, setCurrentResponse] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showSkillsMenu, setShowSkillsMenu] = useState(false);
+  const [lastRenderedTime, setLastRenderedTime] = useState(0);
 
   const filteredCommands = SLASH_COMMANDS.filter(cmd => cmd.cmd.startsWith(input));
   const showSlashMenu = input.startsWith('/') && filteredCommands.length > 0 && !showSkillsMenu;
@@ -56,6 +58,14 @@ const ChatScreen = ({ onCommand }) => {
         setInput('');
         return;
       }
+      if (selectedCmd === '/model') {
+        const models = config.get('models') || [];
+        const selectedId = config.get('selectedModelId');
+        const modelList = models.map(m => `${m.id === selectedId ? '●' : '○'} ${m.name} (${m.id})`).join('\n');
+        setMessages(prev => [...prev, { role: 'system', content: `Available models:\n${modelList}\nUse "/model <id>" to switch.` }]);
+        setInput('');
+        return;
+      }
       if (selectedCmd === '/exit' || selectedCmd === '/quit') {
         process.exit(0);
       }
@@ -66,7 +76,7 @@ const ChatScreen = ({ onCommand }) => {
       }
     }
 
-    // Handle direct typing of commands
+    // Handle direct typing of commands (including /model <id>)
     if (trimmed.startsWith('/')) {
       if (trimmed === '/skills') {
         setShowSkillsMenu(true);
@@ -75,6 +85,28 @@ const ChatScreen = ({ onCommand }) => {
       }
       if (trimmed === '/clear') {
         setMessages([]);
+        setInput('');
+        return;
+      }
+      if (trimmed.startsWith('/model')) {
+        const models = config.get('models') || [];
+        const selectedId = config.get('selectedModelId');
+        const args = trimmed.split(' ').slice(1).join(' ').trim();
+        
+        if (!args) {
+          const modelList = models.map(m => `${m.id === selectedId ? '●' : '○'} ${m.name} (${m.id})`).join('\n');
+          setMessages(prev => [...prev, { role: 'system', content: `Available models:\n${modelList}\nUse "/model <id>" to switch.` }]);
+          setInput('');
+          return;
+        }
+
+        const targetModel = models.find(m => m.id === args || m.name === args);
+        if (targetModel) {
+          config.set('selectedModelId', targetModel.id);
+          setMessages(prev => [...prev, { role: 'system', content: `Switched to model: ${targetModel.name}` }]);
+        } else {
+          setMessages(prev => [...prev, { role: 'system', content: `Model "${args}" not found.` }]);
+        }
         setInput('');
         return;
       }
@@ -96,17 +128,30 @@ const ChatScreen = ({ onCommand }) => {
     setCurrentResponse('');
 
     try {
+      const selectedModelId = config.get('selectedModelId');
+      const models = config.get('models') || [];
+      const selectedModel = models.find(m => m.id === selectedModelId) || models[0] || {};
+      const provider = selectedModel.provider || 'openai';
+
       const responseStream = runner.run({
         messages: newMessages,
-        provider: config.get('provider') || 'openai',
-        model: config.get('model')
+        provider,
+        model: selectedModel.model
       });
 
       let fullContent = '';
+      let lastYieldTime = Date.now();
+
       for await (const chunk of responseStream) {
         if (chunk.type === 'content') {
           fullContent += chunk.content;
-          setCurrentResponse(fullContent);
+          
+          // Throttle state updates to max 10 times per second to reduce Ink lag
+          const now = Date.now();
+          if (now - lastYieldTime > 100) {
+            setCurrentResponse(fullContent);
+            lastYieldTime = now;
+          }
         } else if (chunk.type === 'error') {
           setMessages(prev => [...prev, { role: 'system', content: `Error: ${chunk.error}` }]);
         }
@@ -192,9 +237,19 @@ const ChatScreen = ({ onCommand }) => {
         {!showSlashMenu && (
           <Box flexDirection="row" justifyContent="space-between" marginTop={1}>
             <Text color="gray">? for shortcuts</Text>
-            {!config.get('openaiApiKey') && config.get('provider') === 'openai' && (
-              <Text color="#f47454">Missing API key · Run /settings</Text>
-            )}
+            {(() => {
+              const selectedModelId = config.get('selectedModelId');
+              const models = config.get('models') || [];
+              const selectedModel = models.find(m => m.id === selectedModelId) || models[0] || {};
+              const provider = selectedModel.provider || 'openai';
+              const apiKeyName = `${provider}ApiKey`;
+              const hasApiKey = config.get(apiKeyName);
+              
+              if (!hasApiKey && provider !== 'ollama') {
+                return <Text color="#f47454">Missing {provider} API key · Run /settings</Text>;
+              }
+              return null;
+            })()}
           </Box>
         )}
       </Box>

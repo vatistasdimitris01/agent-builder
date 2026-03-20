@@ -1,11 +1,18 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import os from 'os';
 
 const execAsync = promisify(exec);
 
 const execute = async ({ command, cwd }) => {
   try {
-    const options = cwd ? { cwd } : {};
+    const isWindows = os.platform() === 'win32';
+    const shell = isWindows ? 'powershell.exe' : '/bin/bash';
+    const options = { 
+      cwd: cwd || process.cwd(),
+      shell: shell
+    };
+    
     const { stdout, stderr } = await execAsync(command, options);
     
     if (stderr) {
